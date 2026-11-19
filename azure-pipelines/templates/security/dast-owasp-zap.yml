@@ -1,0 +1,28 @@
+# DevSecOps Step Template: Dynamic Application Security Testing (DAST) with OWASP ZAP
+parameters:
+  - name: targetUrl
+    type: string
+    default: 'https://app.farazahmed.cloud'
+
+steps:
+  - script: |
+      echo "=========================================================="
+      echo "🌐 [DevSecOps] Step 6: DAST Security Scan with OWASP ZAP"
+      echo "Target URL: ${{ parameters.targetUrl }}"
+      echo "=========================================================="
+      # Run OWASP ZAP baseline scan via Docker
+      docker run --rm -v $(Build.ArtifactStagingDirectory):/zap/wrk/:rw \
+        ghcr.io/zaproxy/zaproxy:stable zap-baseline.py \
+        -t ${{ parameters.targetUrl }} \
+        -J zap-report.json \
+        -r zap-report.html || true
+
+      echo "✅ DAST scan complete. HTML & JSON reports generated."
+    displayName: 'Run OWASP ZAP Baseline DAST Scan'
+
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish DAST Report'
+    condition: always()
+    inputs:
+      PathtoPublish: '$(Build.ArtifactStagingDirectory)/zap-report.html'
+      ArtifactName: 'Security-Reports'

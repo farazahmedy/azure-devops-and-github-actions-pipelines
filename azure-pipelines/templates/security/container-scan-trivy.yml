@@ -1,0 +1,40 @@
+# DevSecOps Step Template: Container Image Vulnerability Scanning with Trivy
+parameters:
+  - name: imageUri
+    type: string
+  - name: failOnCritical
+    type: boolean
+    default: true
+
+steps:
+  - script: |
+      echo "=========================================================="
+      echo "🐳 [DevSecOps] Step 5: Container Image Vulnerability Scan"
+      echo "Image Target: ${{ parameters.imageUri }}"
+      echo "=========================================================="
+      which trivy || curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+
+      # Scan Container Image with table output & JSON report
+      trivy image \
+        --severity HIGH,CRITICAL \
+        --format table \
+        ${{ parameters.imageUri }}
+
+      trivy image \
+        --severity HIGH,CRITICAL \
+        --format json \
+        --output $(Build.ArtifactStagingDirectory)/container-cve-report.json \
+        ${{ parameters.imageUri }}
+
+      # Strict Policy Enforcement for Production
+      if [ "${{ parameters.failOnCritical }}" = "True" ]; then
+        trivy image --severity CRITICAL --exit-code 1 ${{ parameters.imageUri }}
+      fi
+    displayName: 'Scan Container Image with Aqua Trivy'
+
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish Container CVE Report'
+    condition: always()
+    inputs:
+      PathtoPublish: '$(Build.ArtifactStagingDirectory)/container-cve-report.json'
+      ArtifactName: 'Security-Reports'

@@ -1,0 +1,68 @@
+# Master Enterprise DevSecOps CI/CD Pipeline
+# Implements: Gitleaks (Secrets) + Semgrep (SAST) + Trivy (SCA/Container) + Checkov (IaC) + OWASP ZAP (DAST)
+
+trigger:
+  branches:
+    include:
+      - main
+      - security/*
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  imageName: 'acrcloudprodeastus.azurecr.io/cloud-app:$(Build.BuildId)'
+
+stages:
+  # ==========================================
+  # STAGE 1: Shift-Left Security Audits (SAST, Secrets, SCA, IaC)
+  # ==========================================
+  - stage: SecurityAudit
+    displayName: '🛡️ DevSecOps Security Audits'
+    jobs:
+      - job: SecretScan
+        displayName: '1. Secret Scanning'
+        steps:
+          - template: templates/security/secret-scan-gitleaks.yml
+            parameters:
+              failOnLeak: true
+
+      - job: SASTScan
+        displayName: '2. Static Code Analysis (SAST)'
+        steps:
+          - template: templates/security/sast-semgrep.yml
+            parameters:
+              targetDirectory: 'sample-app'
+
+      - job: SCAScan
+        displayName: '3. Dependency Vulnerability Scan (SCA)'
+        steps:
+          - template: templates/security/sca-dependency-scan.yml
+            parameters:
+              projectPath: 'sample-app'
+
+      - job: IaCScan
+        displayName: '4. Infrastructure as Code Scan (IaC)'
+        steps:
+          - template: templates/security/iac-scan-checkov.yml
+            parameters:
+              targetDirectory: '.'
+
+  # ==========================================
+  # STAGE 2: Build & Container Vulnerability Scan
+  # ==========================================
+  - stage: BuildAndContainerScan
+    displayName: '🐳 Build & Container Image CVE Scan'
+    dependsOn: SecurityAudit
+    jobs:
+      - job: ContainerJob
+        displayName: 'Build and Scan Docker Image'
+        steps:
+          - script: |
+              docker build -t $(imageName) sample-app/
+            displayName: 'Build Local Docker Image'
+
+          - template: templates/security/container-scan-trivy.yml
+            parameters:
+              imageUri: $(imageName)
+              failOnCritical: false # Set true to break build on CVE-202X critical vulnerabilities

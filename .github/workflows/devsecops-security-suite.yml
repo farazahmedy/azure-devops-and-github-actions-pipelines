@@ -1,0 +1,73 @@
+name: "DevSecOps Master Security Suite"
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    - cron: '0 0 * * 0' # Weekly automated security audit
+
+permissions:
+  contents: read
+  security-events: write # Required for uploading SARIF reports to GitHub Security Tab
+
+jobs:
+  secret_scan:
+    name: "1. Secret Scanning (Gitleaks)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  sast_scan:
+    name: "2. SAST Scan (Semgrep)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/owasp-top-ten
+            p/secrets
+
+  iac_scan:
+    name: "3. IaC Misconfiguration Scan (Checkov)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: bridgecrewio/checkov-action@master
+        with:
+          directory: '.'
+          framework: terraform,helm,kubernetes
+          output_format: cli,sarif
+          output_file_path: console,results.sarif
+          soft_fail: true
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: results.sarif
+
+  container_scan:
+    name: "4. Container Vulnerability Scan (Trivy)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Local Container Image
+        run: |
+          docker build -t cloud-app:${{ github.sha }} sample-app/
+      - uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'cloud-app:${{ github.sha }}'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'

@@ -1,0 +1,34 @@
+# DevSecOps Step Template: Infrastructure as Code (IaC) Scanning with Checkov
+parameters:
+  - name: framework
+    type: string
+    default: 'terraform,helm,kubernetes'
+  - name: targetDirectory
+    type: string
+    default: '.'
+
+steps:
+  - script: |
+      echo "=========================================================="
+      echo "🏗️ [DevSecOps] Step 3: IaC Security Scanning with Checkov"
+      echo "=========================================================="
+      python3 -m pip install checkov
+
+      # Run Checkov against Terraform, Helm, and K8s manifests
+      checkov \
+        --directory ${{ parameters.targetDirectory }} \
+        --framework ${{ parameters.framework }} \
+        --output cli \
+        --output json \
+        --output-file-path $(Build.ArtifactStagingDirectory) \
+        --soft-fail
+
+      echo "✅ Checkov IaC security audit completed."
+    displayName: 'Run Checkov IaC Misconfiguration Scanner'
+
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish IaC Checkov Report'
+    condition: always()
+    inputs:
+      PathtoPublish: '$(Build.ArtifactStagingDirectory)/results_json.json'
+      ArtifactName: 'Security-Reports'

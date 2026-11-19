@@ -1,0 +1,34 @@
+# DevSecOps Step Template: Software Composition Analysis (SCA) with Trivy & Audit
+parameters:
+  - name: projectPath
+    type: string
+    default: 'sample-app'
+
+steps:
+  - script: |
+      echo "=========================================================="
+      echo "📦 [DevSecOps] Step 4: Software Composition Analysis (SCA)"
+      echo "=========================================================="
+      cd ${{ parameters.projectPath }}
+
+      # 1. Native package manager vulnerability audit
+      npm audit --audit-level=high || true
+
+      # 2. Trivy Filesystem and Dependency Scanner
+      curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+      trivy fs \
+        --scanners vuln \
+        --severity HIGH,CRITICAL \
+        --format json \
+        --output $(Build.ArtifactStagingDirectory)/sca-trivy-report.json \
+        .
+
+      echo "✅ Dependency vulnerability scan finished."
+    displayName: 'Run SCA Dependency Vulnerability Scanner'
+
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish SCA Vulnerability Report'
+    condition: always()
+    inputs:
+      PathtoPublish: '$(Build.ArtifactStagingDirectory)/sca-trivy-report.json'
+      ArtifactName: 'Security-Reports'

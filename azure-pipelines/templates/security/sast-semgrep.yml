@@ -1,0 +1,33 @@
+# DevSecOps Step Template: Static Application Security Testing (SAST) with Semgrep
+parameters:
+  - name: targetDirectory
+    type: string
+    default: 'sample-app'
+  - name: ruleSet
+    type: string
+    default: 'p/default' # OWASP Top 10 + CWE security rules
+
+steps:
+  - script: |
+      echo "=========================================================="
+      echo "🛡️ [DevSecOps] Step 2: SAST Code Analysis with Semgrep"
+      echo "=========================================================="
+      # Install Semgrep CLI
+      python3 -m pip install --upgrade pip semgrep
+
+      # Run Semgrep security rules
+      semgrep scan \
+        --config="${{ parameters.ruleSet }}" \
+        --json \
+        --output=$(Build.ArtifactStagingDirectory)/semgrep-report.json \
+        ${{ parameters.targetDirectory }}
+
+      echo "✅ SAST scan completed. Findings saved to semgrep-report.json"
+    displayName: 'Run Semgrep SAST Scanner'
+
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish SAST Report'
+    condition: always()
+    inputs:
+      PathtoPublish: '$(Build.ArtifactStagingDirectory)/semgrep-report.json'
+      ArtifactName: 'Security-Reports'
