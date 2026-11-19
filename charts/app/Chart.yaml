@@ -1,0 +1,14 @@
+apiVersion: v2
+name: cloud-app
+description: Production-grade Helm chart for deploying microservices to Azure Kubernetes Service (AKS)
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - azure
+  - kubernetes
+  - aks
+  - microservice
+maintainers:
+  - name: Faraz Ahmed
+    email: a.faraz18@gmail.com

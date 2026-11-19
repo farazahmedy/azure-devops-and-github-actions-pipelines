@@ -1,0 +1,83 @@
+replicaCount: 3
+
+image:
+  repository: acrcloudprodeastus.azurecr.io/cloud-app
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: "cloud-app"
+
+serviceAccount:
+  create: true
+  annotations:
+    azure.workload.identity/client-id: ""
+  name: "sa-cloud-app"
+
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 2000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+ingress:
+  enabled: true
+  className: "webapprouting.kubernetes.azure.com"
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: app.farazahmed.cloud
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: app-tls-cert
+      hosts:
+        - app.farazahmed.cloud
+
+resources:
+  limits:
+    cpu: 250m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector:
+  agentpool: systempool
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - cloud-app
+          topologyKey: kubernetes.io/hostname
