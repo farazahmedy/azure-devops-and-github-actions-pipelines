@@ -1,0 +1,12 @@
+# Production Environment Variables
+variables:
+  environment: 'production'
+  azureServiceConnection: 'sc-azure-prod'
+  resourceGroupName: 'rg-cloud-prod-eastus'
+  keyVaultName: 'kv-cloud-prod-eastus'
+  aksClusterName: 'aks-cloud-prod'
+  k8sNamespace: 'production'
+  appServicePlan: 'asp-cloud-prod'
+  webAppName: 'app-cloud-prod-eastus'
+  dnsZone: 'farazahmed.cloud'
+  replicaCount: 3

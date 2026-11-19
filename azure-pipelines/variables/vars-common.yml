@@ -1,0 +1,10 @@
+# Reusable Common Pipeline Variables Template
+variables:
+  appName: 'cloud-microservice'
+  dockerRegistryServiceConnection: 'sc-acr-cloud'
+  imageRepository: 'cloud-microservice'
+  containerRegistry: 'acrcloudprodeastus.azurecr.io'
+  dockerfilePath: 'sample-app/Dockerfile'
+  buildConfiguration: 'Release'
+  nodeVersion: '18.x'
+  helmChartPath: 'charts/app'

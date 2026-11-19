@@ -1,0 +1,87 @@
+# Reusable Stage Template: Deploy to Target Environment
+parameters:
+  - name: stageName
+    type: string
+  - name: displayName
+    type: string
+  - name: environmentName
+    type: string
+  - name: azureServiceConnection
+    type: string
+  - name: keyVaultName
+    type: string
+  - name: resourceGroupName
+    type: string
+  - name: aksClusterName
+    type: string
+  - name: k8sNamespace
+    type: string
+  - name: replicaCount
+    type: number
+
+stages:
+  - stage: ${{ parameters.stageName }}
+    displayName: '${{ parameters.displayName }}'
+    jobs:
+      - deployment: DeployJob
+        displayName: 'Deploy to ${{ parameters.environmentName }}'
+        environment: '${{ parameters.environmentName }}' # Bound to Azure DevOps Environment approvals & checks
+        pool:
+          vmImage: 'ubuntu-latest'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: DownloadPipelineArtifact@2
+                  displayName: 'Download Helm Chart Artifact'
+                  inputs:
+                    artifact: 'helm-chart'
+                    path: '$(Pipeline.Workspace)/helm-chart'
+
+                # Step 1: Securely Fetch Secrets from Azure Key Vault
+                - template: keyvault-secrets-step.yml
+                  parameters:
+                    azureServiceConnection: '${{ parameters.azureServiceConnection }}'
+                    keyVaultName: '${{ parameters.keyVaultName }}'
+                    secretsFilter: 'DbConnectionString,ApiKey,TlsCertificate'
+
+                # Step 2: Login to Azure AKS Cluster
+                - task: AzureCLI@2
+                  displayName: 'Get AKS Credentials'
+                  inputs:
+                    azureSubscription: '${{ parameters.azureServiceConnection }}'
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      az aks get-credentials \
+                        --resource-group ${{ parameters.resourceGroupName }} \
+                        --name ${{ parameters.aksClusterName }} \
+                        --overwrite-existing
+
+                # Step 3: Deploy Helm Chart to AKS
+                - task: HelmDeploy@0
+                  displayName: 'Deploy Helm Release to AKS'
+                  inputs:
+                    connectionType: 'Azure Resource Manager'
+                    azureSubscription: '${{ parameters.azureServiceConnection }}'
+                    azureResourceGroup: '${{ parameters.resourceGroupName }}'
+                    kubernetesCluster: '${{ parameters.aksClusterName }}'
+                    namespace: '${{ parameters.k8sNamespace }}'
+                    command: 'upgrade'
+                    chartType: 'FilePath'
+                    chartPath: '$(Pipeline.Workspace)/helm-chart'
+                    releaseName: 'cloud-app'
+                    install: true
+                    arguments: >-
+                      --set replicaCount=${{ parameters.replicaCount }}
+                      --set image.tag=$(Build.BuildId)
+                      --set database.secretConnectionString="$(DbConnectionString)"
+                      --atomic
+                      --timeout 5m
+
+                # Step 4: Validate Deployment Rollout
+                - script: |
+                    echo "==> Verifying pod rollout status..."
+                    kubectl rollout status deployment/cloud-app -n ${{ parameters.k8sNamespace }}
+                    echo "==> Deployment successfully verified!"
+                  displayName: 'Verify Rollout Status'

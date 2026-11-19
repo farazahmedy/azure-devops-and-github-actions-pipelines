@@ -1,0 +1,12 @@
+# Development Environment Variables
+variables:
+  environment: 'development'
+  azureServiceConnection: 'sc-azure-dev'
+  resourceGroupName: 'rg-cloud-dev-eastus'
+  keyVaultName: 'kv-cloud-dev-eastus'
+  aksClusterName: 'aks-cloud-dev'
+  k8sNamespace: 'development'
+  appServicePlan: 'asp-cloud-dev'
+  webAppName: 'app-cloud-dev-eastus'
+  dnsZone: 'dev.farazahmed.cloud'
+  replicaCount: 1

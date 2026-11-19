@@ -1,0 +1,52 @@
+# Reusable Stage Template: Build, Test & Containerize
+parameters:
+  - name: imageRepository
+    type: string
+  - name: containerRegistry
+    type: string
+  - name: dockerfilePath
+    type: string
+  - name: buildConfiguration
+    type: string
+    default: 'Release'
+
+stages:
+  - stage: BuildAndPackage
+    displayName: 'Stage: Build, Scan & Containerize'
+    jobs:
+      - job: BuildJob
+        displayName: 'Build and Unit Test'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '18.x'
+            displayName: 'Install Node.js'
+
+          - script: |
+              cd sample-app
+              npm ci
+              npm test
+            displayName: 'Run Unit Tests'
+
+          - template: security-scan.yml
+            parameters:
+              targetPath: 'sample-app'
+
+          - task: Docker@2
+            displayName: 'Build & Push Docker Image to ACR'
+            inputs:
+              command: 'buildAndPush'
+              repository: '${{ parameters.imageRepository }}'
+              dockerfile: '${{ parameters.dockerfilePath }}'
+              containerRegistry: 'sc-acr-cloud'
+              tags: |
+                $(Build.BuildId)
+                latest
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish Helm Chart Artifact'
+            inputs:
+              targetPath: 'charts/app'
+              artifact: 'helm-chart'

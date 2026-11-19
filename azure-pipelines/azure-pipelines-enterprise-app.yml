@@ -1,0 +1,59 @@
+# Master Multi-Stage Enterprise Azure DevOps Pipeline
+# Implements: Variable Templates + Key Vault Secret Ingestion + Reusable Stage Templates + Approval Gates
+
+trigger:
+  branches:
+    include:
+      - main
+      - releases/*
+  paths:
+    include:
+      - sample-app/**
+      - charts/app/**
+      - azure-pipelines/**
+
+# Import Common Variables Template
+variables:
+  - template: variables/vars-common.yml
+
+stages:
+  # ==========================================
+  # STAGE 1: Build, Test & Container Scan
+  # ==========================================
+  - template: templates/stages-build-test.yml
+    parameters:
+      imageRepository: $(imageRepository)
+      containerRegistry: $(containerRegistry)
+      dockerfilePath: $(dockerfilePath)
+      buildConfiguration: $(buildConfiguration)
+
+  # ==========================================
+  # STAGE 2: Deploy to Development Environment
+  # ==========================================
+  - template: templates/stages-deploy.yml
+    parameters:
+      stageName: 'DeployDev'
+      displayName: 'Stage: Deploy to Development'
+      environmentName: 'development'
+      azureServiceConnection: 'sc-azure-dev'
+      keyVaultName: 'kv-cloud-dev-eastus'
+      resourceGroupName: 'rg-cloud-dev-eastus'
+      aksClusterName: 'aks-cloud-dev'
+      k8sNamespace: 'development'
+      replicaCount: 1
+
+  # ==========================================
+  # STAGE 3: Deploy to Production Environment
+  # (Protected by Azure DevOps Environment Approval Checks)
+  # ==========================================
+  - template: templates/stages-deploy.yml
+    parameters:
+      stageName: 'DeployProd'
+      displayName: 'Stage: Deploy to Production (Manual Approval)'
+      environmentName: 'production'
+      azureServiceConnection: 'sc-azure-prod'
+      keyVaultName: 'kv-cloud-prod-eastus'
+      resourceGroupName: 'rg-cloud-prod-eastus'
+      aksClusterName: 'aks-cloud-prod'
+      k8sNamespace: 'production'
+      replicaCount: 3
