@@ -1,0 +1,76 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  azureSubscription: 'sc-azure-production'
+  webAppName: 'app-cloud-prod-eastus'
+  stagingSlotName: 'staging'
+
+stages:
+  - stage: BuildAndTest
+    displayName: 'Build & Unit Tests'
+    jobs:
+      - job: Build
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '18.x'
+          - script: |
+              npm ci
+              npm test -- --coverage
+              npm run build --if-present
+            displayName: 'Install, Test & Build'
+          - task: ArchiveFiles@2
+            inputs:
+              rootFolderOrFile: '$(System.DefaultWorkingDirectory)/dist'
+              includeRootFolder: false
+              archiveType: 'zip'
+              archiveFile: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip'
+          - task: PublishBuildArtifacts@1
+            inputs:
+              PathtoPublish: '$(Build.ArtifactStagingDirectory)/$(Build.BuildId).zip'
+              ArtifactName: 'drop'
+
+  - stage: DeployToStaging
+    displayName: 'Deploy to Staging Slot'
+    dependsOn: BuildAndTest
+    jobs:
+      - job: DeployStaging
+        steps:
+          - task: DownloadBuildArtifacts@0
+            inputs:
+              buildType: 'current'
+              downloadType: 'single'
+              artifactName: 'drop'
+              downloadPath: '$(System.ArtifactsDirectory)'
+          - task: AzureWebApp@1
+            displayName: 'Deploy to Azure WebApp (Staging)'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              appType: 'webAppLinux'
+              appName: '$(webAppName)'
+              deployToSlotOrASE: true
+              resourceGroupName: 'rg-cloud-prod-eastus'
+              slotName: '$(stagingSlotName)'
+              package: '$(System.ArtifactsDirectory)/drop/$(Build.BuildId).zip'
+
+  - stage: SwapToProduction
+    displayName: 'Swap Staging to Production'
+    dependsOn: DeployToStaging
+    jobs:
+      - job: SwapSlot
+        steps:
+          - task: AzureAppServiceManage@0
+            displayName: 'Swap Slots (Zero Downtime)'
+            inputs:
+              azureSubscription: '$(azureSubscription)'
+              Action: 'Swap Slots'
+              WebAppName: '$(webAppName)'
+              ResourceGroupName: 'rg-cloud-prod-eastus'
+              SourceSlot: '$(stagingSlotName)'
+              SwapWithProduction: true
